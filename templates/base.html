@@ -34,6 +34,47 @@
     </footer>
 
     <script src="/static/js/app.js"></script>
+
+    <!-- iframe resize script for Wix embedding -->
+    <script>
+    (function() {
+        // Detect if running inside an iframe
+        const isEmbedded = window.self !== window.top;
+
+        if (isEmbedded) {
+            document.documentElement.classList.add('embedded');
+
+            function sendHeight() {
+                const height = document.body.scrollHeight + 20; // Small buffer
+                window.parent.postMessage({
+                    type: 'concreteai-resize',
+                    height: height
+                }, '*');
+            }
+
+            // Send height on load
+            window.addEventListener('load', sendHeight);
+
+            // Send height on resize
+            window.addEventListener('resize', sendHeight);
+
+            // Send height when content changes
+            const observer = new MutationObserver(sendHeight);
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true,
+                attributes: true
+            });
+
+            // Send height periodically for dynamic content like charts
+            setInterval(sendHeight, 500);
+
+            // Initial send
+            sendHeight();
+        }
+    })();
+    </script>
+
     {% block scripts %}{% endblock %}
 </body>
 </html>

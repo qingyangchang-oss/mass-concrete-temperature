@@ -1,5 +1,19 @@
 /* ConcreteAI - Mass Concrete Temperature Modeling Platform */
 
+/* Embedded mode - remove extra spacing when in iframe */
+html.embedded,
+html.embedded body {
+    overflow-x: hidden;
+}
+
+html.embedded .navbar {
+    position: relative;
+}
+
+html.embedded .footer {
+    margin-bottom: 0;
+}
+
 :root {
     --primary-color: #2563eb;
     --primary-dark: #1d4ed8;
