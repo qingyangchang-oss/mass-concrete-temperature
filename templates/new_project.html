@@ -1,0 +1,590 @@
+{% extends "base.html" %}
+
+{% block title %}New Project - ConcreteAI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Create New Project</h1>
+</div>
+
+<div class="form-with-viz">
+    <form id="projectForm" class="form-container">
+        <div class="form-section">
+            <h2>Project Information</h2>
+
+            <div class="form-group">
+                <label for="name">Project Name *</label>
+                <input type="text" id="name" name="name" required>
+            </div>
+
+            <div class="form-group">
+                <label for="location">Location (City)</label>
+                <div class="location-search">
+                    <input type="text" id="location" name="location" placeholder="Enter city name">
+                    <button type="button" class="btn btn-secondary" onclick="searchLocation()">Search</button>
+                </div>
+                <div id="locationResult" class="location-result"></div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="latitude">Latitude</label>
+                    <input type="number" id="latitude" name="latitude" step="0.0001" placeholder="Auto-filled from search">
+                </div>
+                <div class="form-group">
+                    <label for="longitude">Longitude</label>
+                    <input type="number" id="longitude" name="longitude" step="0.0001" placeholder="Auto-filled from search">
+                </div>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h2>Mix Design</h2>
+
+            <div class="form-group">
+                <label for="mixName">Mix Design Name</label>
+                <input type="text" id="mixName" name="mixName" placeholder="e.g., Mix-01">
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="cementType">Cement Type *</label>
+                    <select id="cementType" name="cementType" required>
+                        <option value="OPC">OPC (Ordinary Portland Cement)</option>
+                        <option value="PPC">PPC (Portland Pozzolana Cement)</option>
+                        <option value="PSC">PSC (Portland Slag Cement)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="cementContent">Cement Content (kg/m³) *</label>
+                    <input type="number" id="cementContent" name="cementContent" required min="200" max="600" value="400">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="ggbsPercent">GGBS (%)</label>
+                    <input type="number" id="ggbsPercent" name="ggbsPercent" min="0" max="80" value="0">
+                </div>
+                <div class="form-group">
+                    <label for="flyAshPercent">Fly Ash (%)</label>
+                    <input type="number" id="flyAshPercent" name="flyAshPercent" min="0" max="50" value="0">
+                </div>
+                <div class="form-group">
+                    <label for="silicaFumePercent">Silica Fume (%)</label>
+                    <input type="number" id="silicaFumePercent" name="silicaFumePercent" min="0" max="15" value="0">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="waterCementRatio">Water-Cement Ratio *</label>
+                    <input type="number" id="waterCementRatio" name="waterCementRatio" required step="0.01" min="0.3" max="0.7" value="0.45">
+                </div>
+                <div class="form-group">
+                    <label for="aggregateType">Aggregate Type *</label>
+                    <select id="aggregateType" name="aggregateType" required>
+                        <option value="limestone">Limestone</option>
+                        <option value="granite">Granite</option>
+                        <option value="basalt">Basalt</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h2>Pour Details</h2>
+
+            <div class="form-group">
+                <label for="pourName">Pour Name</label>
+                <input type="text" id="pourName" name="pourName" placeholder="e.g., Foundation Block A">
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="length">Length (m) *</label>
+                    <input type="number" id="length" name="length" required step="0.1" min="0.5" value="5" oninput="updateVisualization()">
+                </div>
+                <div class="form-group">
+                    <label for="width">Width (m) *</label>
+                    <input type="number" id="width" name="width" required step="0.1" min="0.5" value="5" oninput="updateVisualization()">
+                </div>
+                <div class="form-group">
+                    <label for="height">Height (m) *</label>
+                    <input type="number" id="height" name="height" required step="0.1" min="0.3" value="2" oninput="updateVisualization()">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="castingDate">Casting Date *</label>
+                    <input type="date" id="castingDate" name="castingDate" required>
+                </div>
+                <div class="form-group">
+                    <label for="castingTime">Casting Time *</label>
+                    <input type="time" id="castingTime" name="castingTime" required value="08:00">
+                </div>
+                <div class="form-group">
+                    <label for="freshTemp">Fresh Concrete Temp (°C) *</label>
+                    <input type="number" id="freshTemp" name="freshTemp" required min="5" max="40" value="25">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="formworkType">Formwork Type *</label>
+                    <select id="formworkType" name="formworkType" required>
+                        <option value="plywood">Plywood</option>
+                        <option value="steel">Steel</option>
+                        <option value="insulated">Insulated</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="curingMethod">Curing Method *</label>
+                    <select id="curingMethod" name="curingMethod" required>
+                        <option value="water">Water Curing</option>
+                        <option value="compound">Curing Compound</option>
+                        <option value="blankets">Insulation Blankets</option>
+                        <option value="none">None</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="curingDuration">Curing Duration (days)</label>
+                    <input type="number" id="curingDuration" name="curingDuration" min="0" max="28" value="7">
+                </div>
+                <div class="form-group">
+                    <label for="formworkRemoval">Formwork Removal (hours)</label>
+                    <input type="number" id="formworkRemoval" name="formworkRemoval" min="0" max="336" value="72">
+                </div>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button type="button" class="btn btn-secondary" onclick="history.back()">Cancel</button>
+            <button type="submit" class="btn btn-primary">Create Project & Run Prediction</button>
+        </div>
+    </form>
+
+    <!-- Visualization Panel -->
+    <div class="visualization-panel">
+        <div class="viz-card">
+            <h2>Structure Visualization</h2>
+            <p class="viz-subtitle">3D view with temperature monitoring points</p>
+
+            <div class="viz-container">
+                <svg id="structureViz" viewBox="0 0 400 350" preserveAspectRatio="xMidYMid meet">
+                    <!-- Will be populated by JavaScript -->
+                </svg>
+            </div>
+
+            <div class="dimension-display">
+                <div class="dim-item">
+                    <span class="dim-label">Length:</span>
+                    <span class="dim-value" id="dimLength">5.0 m</span>
+                </div>
+                <div class="dim-item">
+                    <span class="dim-label">Width:</span>
+                    <span class="dim-value" id="dimWidth">5.0 m</span>
+                </div>
+                <div class="dim-item">
+                    <span class="dim-label">Height:</span>
+                    <span class="dim-value" id="dimHeight">2.0 m</span>
+                </div>
+                <div class="dim-item">
+                    <span class="dim-label">Volume:</span>
+                    <span class="dim-value" id="dimVolume">50.0 m³</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="viz-card">
+            <h2>Monitoring Points</h2>
+            <div class="legend">
+                <div class="legend-item">
+                    <span class="legend-dot" style="background: #e74c3c;"></span>
+                    <div class="legend-text">
+                        <strong>Mid-Depth Central</strong>
+                        <small>Core temperature (hottest point)</small>
+                    </div>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-dot" style="background: #f39c12;"></span>
+                    <div class="legend-text">
+                        <strong>Mid-Depth Side</strong>
+                        <small>Near formwork edge</small>
+                    </div>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-dot" style="background: #3498db;"></span>
+                    <div class="legend-text">
+                        <strong>Top Surface Central</strong>
+                        <small>Exposed surface temperature</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="viz-card">
+            <h2>Cross-Section View</h2>
+            <div class="viz-container">
+                <svg id="crossSectionViz" viewBox="0 0 400 200" preserveAspectRatio="xMidYMid meet">
+                    <!-- Will be populated by JavaScript -->
+                </svg>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Set default date to today
+document.getElementById('castingDate').valueAsDate = new Date();
+
+// Initialize visualization
+updateVisualization();
+
+function updateVisualization() {
+    const length = parseFloat(document.getElementById('length').value) || 5;
+    const width = parseFloat(document.getElementById('width').value) || 5;
+    const height = parseFloat(document.getElementById('height').value) || 2;
+
+    // Update dimension display
+    document.getElementById('dimLength').textContent = length.toFixed(1) + ' m';
+    document.getElementById('dimWidth').textContent = width.toFixed(1) + ' m';
+    document.getElementById('dimHeight').textContent = height.toFixed(1) + ' m';
+    document.getElementById('dimVolume').textContent = (length * width * height).toFixed(1) + ' m³';
+
+    draw3DStructure(length, width, height);
+    drawCrossSection(width, height);
+}
+
+function draw3DStructure(length, width, height) {
+    const svg = document.getElementById('structureViz');
+
+    // Normalize dimensions for display (max dimension = 1)
+    const maxDim = Math.max(length, width, height);
+    const nL = length / maxDim;
+    const nW = width / maxDim;
+    const nH = height / maxDim;
+
+    // 3D isometric projection parameters
+    const scale = 120;
+    const centerX = 200;
+    const centerY = 180;
+
+    // Isometric angles
+    const angleX = Math.PI / 6; // 30 degrees
+    const angleY = Math.PI / 6;
+
+    // Convert 3D to 2D isometric
+    function project(x, y, z) {
+        const px = centerX + (x - y) * Math.cos(angleX) * scale;
+        const py = centerY - z * scale + (x + y) * Math.sin(angleY) * scale * 0.5;
+        return { x: px, y: py };
+    }
+
+    // Define the 8 corners of the box
+    const corners = [
+        project(0, 0, 0),           // 0: front-bottom-left
+        project(nL, 0, 0),          // 1: front-bottom-right
+        project(nL, nW, 0),         // 2: back-bottom-right
+        project(0, nW, 0),          // 3: back-bottom-left
+        project(0, 0, nH),          // 4: front-top-left
+        project(nL, 0, nH),         // 5: front-top-right
+        project(nL, nW, nH),        // 6: back-top-right
+        project(0, nW, nH),         // 7: back-top-left
+    ];
+
+    // Monitoring points
+    const midCentral = project(nL/2, nW/2, nH/2);
+    const midSide = project(nL * 0.1, nW/2, nH/2);
+    const topSurface = project(nL/2, nW/2, nH);
+
+    svg.innerHTML = `
+        <!-- Ground shadow -->
+        <ellipse cx="${centerX}" cy="${centerY + 80}" rx="100" ry="30" fill="rgba(0,0,0,0.1)"/>
+
+        <!-- Back faces (darker) -->
+        <polygon points="${corners[3].x},${corners[3].y} ${corners[2].x},${corners[2].y} ${corners[6].x},${corners[6].y} ${corners[7].x},${corners[7].y}"
+                 fill="#7f8c8d" stroke="#5d6d7e" stroke-width="1.5"/>
+        <polygon points="${corners[2].x},${corners[2].y} ${corners[1].x},${corners[1].y} ${corners[5].x},${corners[5].y} ${corners[6].x},${corners[6].y}"
+                 fill="#95a5a6" stroke="#5d6d7e" stroke-width="1.5"/>
+
+        <!-- Top face -->
+        <polygon points="${corners[4].x},${corners[4].y} ${corners[5].x},${corners[5].y} ${corners[6].x},${corners[6].y} ${corners[7].x},${corners[7].y}"
+                 fill="#bdc3c7" stroke="#5d6d7e" stroke-width="1.5"/>
+
+        <!-- Front faces (lighter) -->
+        <polygon points="${corners[0].x},${corners[0].y} ${corners[1].x},${corners[1].y} ${corners[5].x},${corners[5].y} ${corners[4].x},${corners[4].y}"
+                 fill="#aeb6bf" stroke="#5d6d7e" stroke-width="1.5"/>
+        <polygon points="${corners[0].x},${corners[0].y} ${corners[3].x},${corners[3].y} ${corners[7].x},${corners[7].y} ${corners[4].x},${corners[4].y}"
+                 fill="#a6acaf" stroke="#5d6d7e" stroke-width="1.5"/>
+
+        <!-- Dashed lines to show internal points -->
+        <line x1="${midCentral.x}" y1="${midCentral.y}" x2="${midCentral.x}" y2="${centerY + 60}"
+              stroke="#e74c3c" stroke-width="1" stroke-dasharray="4,4" opacity="0.5"/>
+        <line x1="${midSide.x}" y1="${midSide.y}" x2="${midSide.x}" y2="${centerY + 60}"
+              stroke="#f39c12" stroke-width="1" stroke-dasharray="4,4" opacity="0.5"/>
+
+        <!-- Temperature monitoring points -->
+        <!-- Top Surface Central -->
+        <circle cx="${topSurface.x}" cy="${topSurface.y}" r="10" fill="#3498db" stroke="white" stroke-width="2"/>
+        <text x="${topSurface.x}" y="${topSurface.y - 18}" text-anchor="middle" font-size="11" fill="#2c3e50" font-weight="bold">Top Surface</text>
+
+        <!-- Mid-Depth Central (shown with transparency to indicate inside) -->
+        <circle cx="${midCentral.x}" cy="${midCentral.y}" r="12" fill="#e74c3c" stroke="white" stroke-width="2" opacity="0.9"/>
+        <text x="${midCentral.x + 20}" y="${midCentral.y + 4}" font-size="11" fill="#2c3e50" font-weight="bold">Core</text>
+        <text x="${midCentral.x + 20}" y="${midCentral.y + 16}" font-size="9" fill="#7f8c8d">(Hottest)</text>
+
+        <!-- Mid-Depth Side -->
+        <circle cx="${midSide.x}" cy="${midSide.y}" r="9" fill="#f39c12" stroke="white" stroke-width="2" opacity="0.9"/>
+        <text x="${midSide.x - 45}" y="${midSide.y + 4}" text-anchor="middle" font-size="10" fill="#2c3e50" font-weight="bold">Side</text>
+
+        <!-- Dimension arrows -->
+        <!-- Length arrow -->
+        <defs>
+            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7" fill="#2c3e50"/>
+            </marker>
+            <marker id="arrowhead-start" markerWidth="10" markerHeight="7" refX="1" refY="3.5" orient="auto">
+                <polygon points="10 0, 0 3.5, 10 7" fill="#2c3e50"/>
+            </marker>
+        </defs>
+
+        <!-- Length dimension -->
+        <line x1="${corners[0].x}" y1="${corners[0].y + 25}" x2="${corners[1].x}" y2="${corners[1].y + 25}"
+              stroke="#2c3e50" stroke-width="1.5" marker-end="url(#arrowhead)" marker-start="url(#arrowhead-start)"/>
+        <text x="${(corners[0].x + corners[1].x)/2}" y="${corners[0].y + 45}" text-anchor="middle" font-size="12" fill="#2c3e50">
+            L = ${length.toFixed(1)}m
+        </text>
+
+        <!-- Height dimension -->
+        <line x1="${corners[1].x + 25}" y1="${corners[1].y}" x2="${corners[5].x + 25}" y2="${corners[5].y}"
+              stroke="#2c3e50" stroke-width="1.5" marker-end="url(#arrowhead)" marker-start="url(#arrowhead-start)"/>
+        <text x="${corners[1].x + 45}" y="${(corners[1].y + corners[5].y)/2}" font-size="12" fill="#2c3e50">
+            H = ${height.toFixed(1)}m
+        </text>
+
+        <!-- Width dimension -->
+        <line x1="${corners[1].x + 5}" y1="${corners[1].y + 15}" x2="${corners[2].x + 5}" y2="${corners[2].y + 15}"
+              stroke="#2c3e50" stroke-width="1.5" marker-end="url(#arrowhead)" marker-start="url(#arrowhead-start)"/>
+        <text x="${(corners[1].x + corners[2].x)/2 + 15}" y="${(corners[1].y + corners[2].y)/2 + 30}" font-size="12" fill="#2c3e50">
+            W = ${width.toFixed(1)}m
+        </text>
+    `;
+}
+
+function drawCrossSection(width, height) {
+    const svg = document.getElementById('crossSectionViz');
+
+    // Scale to fit
+    const maxDim = Math.max(width, height);
+    const scale = 140 / maxDim;
+    const w = width * scale;
+    const h = height * scale;
+
+    const centerX = 200;
+    const baseY = 170;
+    const left = centerX - w/2;
+    const right = centerX + w/2;
+    const top = baseY - h;
+
+    // Monitoring point positions
+    const midY = baseY - h/2;
+    const sideX = left + w * 0.1;
+
+    svg.innerHTML = `
+        <!-- Grid lines for depth reference -->
+        <line x1="${left}" y1="${top}" x2="${left}" y2="${baseY}" stroke="#ecf0f1" stroke-width="1"/>
+        <line x1="${centerX}" y1="${top}" x2="${centerX}" y2="${baseY}" stroke="#ecf0f1" stroke-width="1" stroke-dasharray="5,5"/>
+        <line x1="${right}" y1="${top}" x2="${right}" y2="${baseY}" stroke="#ecf0f1" stroke-width="1"/>
+        <line x1="${left}" y1="${midY}" x2="${right}" y2="${midY}" stroke="#ecf0f1" stroke-width="1" stroke-dasharray="5,5"/>
+
+        <!-- Concrete cross-section -->
+        <rect x="${left}" y="${top}" width="${w}" height="${h}"
+              fill="url(#concreteGradient)" stroke="#5d6d7e" stroke-width="2" rx="2"/>
+
+        <!-- Gradient definition for concrete look -->
+        <defs>
+            <linearGradient id="concreteGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" style="stop-color:#bdc3c7"/>
+                <stop offset="50%" style="stop-color:#95a5a6"/>
+                <stop offset="100%" style="stop-color:#7f8c8d"/>
+            </linearGradient>
+        </defs>
+
+        <!-- Formwork indicators -->
+        <rect x="${left - 8}" y="${top}" width="8" height="${h}" fill="#8B4513" stroke="#5D3A1A" stroke-width="1"/>
+        <rect x="${right}" y="${top}" width="8" height="${h}" fill="#8B4513" stroke="#5D3A1A" stroke-width="1"/>
+        <text x="${left - 12}" y="${midY}" text-anchor="end" font-size="9" fill="#8B4513" transform="rotate(-90, ${left - 12}, ${midY})">Formwork</text>
+
+        <!-- Ground/base -->
+        <rect x="${left - 20}" y="${baseY}" width="${w + 40}" height="15" fill="#7f8c8d"/>
+        <text x="${centerX}" y="${baseY + 11}" text-anchor="middle" font-size="9" fill="white">Ground/Substrate</text>
+
+        <!-- Top surface exposure indicator -->
+        <path d="M ${left} ${top - 5} Q ${centerX} ${top - 15} ${right} ${top - 5}"
+              stroke="#3498db" stroke-width="2" fill="none" stroke-dasharray="4,2"/>
+        <text x="${centerX}" y="${top - 20}" text-anchor="middle" font-size="9" fill="#3498db">Exposed to Ambient</text>
+
+        <!-- Temperature monitoring points -->
+        <!-- Top Surface Central -->
+        <circle cx="${centerX}" cy="${top}" r="8" fill="#3498db" stroke="white" stroke-width="2"/>
+        <line x1="${centerX + 12}" y1="${top}" x2="${centerX + 50}" y2="${top}" stroke="#3498db" stroke-width="1"/>
+        <text x="${centerX + 55}" y="${top + 4}" font-size="10" fill="#3498db" font-weight="bold">Top Surface</text>
+
+        <!-- Mid-Depth Central -->
+        <circle cx="${centerX}" cy="${midY}" r="10" fill="#e74c3c" stroke="white" stroke-width="2"/>
+        <line x1="${centerX + 14}" y1="${midY}" x2="${centerX + 50}" y2="${midY}" stroke="#e74c3c" stroke-width="1"/>
+        <text x="${centerX + 55}" y="${midY - 2}" font-size="10" fill="#e74c3c" font-weight="bold">Core (Hottest)</text>
+        <text x="${centerX + 55}" y="${midY + 10}" font-size="9" fill="#7f8c8d">Mid-Depth Central</text>
+
+        <!-- Mid-Depth Side -->
+        <circle cx="${sideX}" cy="${midY}" r="7" fill="#f39c12" stroke="white" stroke-width="2"/>
+        <line x1="${sideX}" y1="${midY - 10}" x2="${sideX}" y2="${midY - 35}" stroke="#f39c12" stroke-width="1"/>
+        <text x="${sideX}" y="${midY - 40}" text-anchor="middle" font-size="10" fill="#f39c12" font-weight="bold">Side</text>
+
+        <!-- Dimension annotations -->
+        <!-- Width -->
+        <line x1="${left}" y1="${baseY + 25}" x2="${right}" y2="${baseY + 25}"
+              stroke="#2c3e50" stroke-width="1" marker-end="url(#arrowhead)" marker-start="url(#arrowhead-start)"/>
+        <text x="${centerX}" y="${baseY + 38}" text-anchor="middle" font-size="11" fill="#2c3e50">Width = ${width.toFixed(1)}m</text>
+
+        <!-- Height -->
+        <line x1="${right + 25}" y1="${top}" x2="${right + 25}" y2="${baseY}"
+              stroke="#2c3e50" stroke-width="1" marker-end="url(#arrowhead)" marker-start="url(#arrowhead-start)"/>
+        <text x="${right + 35}" y="${midY}" font-size="11" fill="#2c3e50" transform="rotate(90, ${right + 35}, ${midY})">Height = ${height.toFixed(1)}m</text>
+
+        <!-- Mid-depth indicator -->
+        <line x1="${left - 15}" y1="${midY}" x2="${left - 25}" y2="${midY}" stroke="#e74c3c" stroke-width="1"/>
+        <text x="${left - 30}" y="${midY + 4}" text-anchor="end" font-size="9" fill="#e74c3c">H/2</text>
+    `;
+}
+
+async function searchLocation() {
+    const city = document.getElementById('location').value;
+    if (!city) return;
+
+    const resultDiv = document.getElementById('locationResult');
+    resultDiv.innerHTML = 'Searching...';
+
+    try {
+        const response = await fetch(`/api/geocode?city=${encodeURIComponent(city)}`);
+        if (response.ok) {
+            const data = await response.json();
+            document.getElementById('latitude').value = data.latitude;
+            document.getElementById('longitude').value = data.longitude;
+            resultDiv.innerHTML = `<span class="success">Found: ${data.name}</span>`;
+        } else {
+            resultDiv.innerHTML = '<span class="error">Location not found</span>';
+        }
+    } catch (error) {
+        resultDiv.innerHTML = '<span class="error">Search failed</span>';
+    }
+}
+
+document.getElementById('projectForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const formData = new FormData(this);
+    const submitBtn = this.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Creating...';
+
+    try {
+        // 1. Create project
+        const projectResponse = await fetch('/api/projects', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                name: formData.get('name'),
+                location: formData.get('location'),
+                latitude: formData.get('latitude') ? parseFloat(formData.get('latitude')) : null,
+                longitude: formData.get('longitude') ? parseFloat(formData.get('longitude')) : null
+            })
+        });
+
+        if (!projectResponse.ok) {
+            throw new Error('Failed to create project');
+        }
+
+        const project = await projectResponse.json();
+
+        // 2. Create mix design
+        const mixResponse = await fetch(`/api/projects/${project.id}/mix-designs`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                name: formData.get('mixName') || 'Default Mix',
+                cement_type: formData.get('cementType'),
+                cement_content: parseFloat(formData.get('cementContent')),
+                ggbs_percent: parseFloat(formData.get('ggbsPercent')) || 0,
+                fly_ash_percent: parseFloat(formData.get('flyAshPercent')) || 0,
+                silica_fume_percent: parseFloat(formData.get('silicaFumePercent')) || 0,
+                water_cement_ratio: parseFloat(formData.get('waterCementRatio')),
+                aggregate_type: formData.get('aggregateType')
+            })
+        });
+
+        if (!mixResponse.ok) {
+            throw new Error('Failed to create mix design');
+        }
+
+        const mixDesign = await mixResponse.json();
+
+        // 3. Create pour
+        const castingDateTime = `${formData.get('castingDate')}T${formData.get('castingTime')}:00`;
+
+        const pourResponse = await fetch(`/api/projects/${project.id}/pours`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                mix_design_id: mixDesign.id,
+                name: formData.get('pourName') || 'Pour 1',
+                length: parseFloat(formData.get('length')),
+                width: parseFloat(formData.get('width')),
+                height: parseFloat(formData.get('height')),
+                casting_datetime: castingDateTime,
+                fresh_concrete_temp: parseFloat(formData.get('freshTemp')),
+                formwork_type: formData.get('formworkType'),
+                curing_method: formData.get('curingMethod'),
+                curing_duration_days: parseInt(formData.get('curingDuration')) || 7,
+                formwork_removal_hours: parseFloat(formData.get('formworkRemoval')) || 72
+            })
+        });
+
+        if (!pourResponse.ok) {
+            throw new Error('Failed to create pour');
+        }
+
+        const pour = await pourResponse.json();
+
+        // 4. Run prediction
+        submitBtn.textContent = 'Running Prediction...';
+
+        const predResponse = await fetch(`/api/pours/${pour.id}/predict`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                duration_hours: 168,
+                time_step_hours: 1
+            })
+        });
+
+        if (!predResponse.ok) {
+            throw new Error('Failed to run prediction');
+        }
+
+        // Redirect to results
+        window.location.href = `/pours/${pour.id}/results`;
+
+    } catch (error) {
+        alert('Error: ' + error.message);
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Create Project & Run Prediction';
+    }
+});
+</script>
+{% endblock %}

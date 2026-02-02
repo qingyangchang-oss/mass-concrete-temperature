@@ -1,0 +1,464 @@
+{% extends "base.html" %}
+
+{% block title %}Calibration - {{ pour.name or 'Pour ' + pour.id|string }} - ConcreteAI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Calibration & Measurements</h1>
+        <p class="subtitle">{{ project.name }} - {{ pour.name or 'Pour ' + pour.id|string }}</p>
+    </div>
+    <div class="header-actions">
+        <a href="/pours/{{ pour.id }}/results" class="btn btn-secondary">View Predictions</a>
+        <a href="/projects/{{ project.id }}/view" class="btn btn-secondary">Back to Project</a>
+    </div>
+</div>
+
+<div class="calibration-layout">
+    <div class="input-section">
+        <div class="card">
+            <h2>Add Measurement</h2>
+            <form id="measurementForm">
+                <div class="form-group">
+                    <label for="timeHours">Time Since Casting (hours) *</label>
+                    <input type="number" id="timeHours" name="time_hours" required min="0" step="0.5">
+                </div>
+                <div class="form-group">
+                    <label for="midCentral">Mid-Depth Central (°C)</label>
+                    <input type="number" id="midCentral" name="mid_depth_central" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label for="midSide">Mid-Depth Side (°C)</label>
+                    <input type="number" id="midSide" name="mid_depth_side" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label for="topSurface">Top Surface (°C)</label>
+                    <input type="number" id="topSurface" name="top_surface_central" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label for="ambientTemp">Ambient Temperature (°C)</label>
+                    <input type="number" id="ambientTemp" name="ambient_temp" step="0.1">
+                </div>
+                <button type="submit" class="btn btn-primary">Add Measurement</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>Bulk Import</h2>
+            <p>Paste CSV data (time_hours, mid_central, mid_side, top_surface, ambient)</p>
+            <textarea id="bulkData" rows="6" placeholder="0, 25, 24.5, 25, 22&#10;12, 45, 42, 35, 20&#10;24, 55, 50, 38, 18"></textarea>
+            <button class="btn btn-secondary" onclick="importBulk()">Import CSV</button>
+        </div>
+
+        <div class="card">
+            <h2>Run Calibration</h2>
+            <p>Calibrate the thermal model based on actual measurements to improve future predictions.</p>
+            <div id="calibrationStatus"></div>
+            <button class="btn btn-primary" onclick="runCalibration()" id="calibrateBtn">
+                Calibrate Model
+            </button>
+        </div>
+    </div>
+
+    <div class="chart-section">
+        <div class="card">
+            <h2>Comparison: Predicted vs Actual</h2>
+            <canvas id="comparisonChart"></canvas>
+        </div>
+
+        <div class="card">
+            <h2>Model Accuracy</h2>
+            <div class="accuracy-stats" id="accuracyStats">
+                <p class="loading">Load measurements to see accuracy metrics</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Measurements</h2>
+            <div class="table-container" style="max-height: 300px; overflow-y: auto;">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Time (h)</th>
+                            <th>Central</th>
+                            <th>Side</th>
+                            <th>Surface</th>
+                            <th>Ambient</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="measurementsBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const pourId = {{ pour.id }};
+let comparisonChart = null;
+let measurements = [];
+let predictions = [];
+
+async function loadData() {
+    try {
+        // Load predictions
+        const predResponse = await fetch(`/api/pours/${pourId}/predictions`);
+        if (predResponse.ok) {
+            predictions = await predResponse.json();
+        }
+
+        // Load measurements
+        const measResponse = await fetch(`/api/pours/${pourId}/measurements`);
+        if (measResponse.ok) {
+            measurements = await measResponse.json();
+        }
+
+        // Load comparison
+        const compResponse = await fetch(`/api/pours/${pourId}/comparison`);
+        if (compResponse.ok) {
+            const comparison = await compResponse.json();
+            updateAccuracyStats(comparison);
+        }
+
+        renderMeasurementsTable();
+        renderComparisonChart();
+    } catch (error) {
+        console.error('Error loading data:', error);
+    }
+}
+
+function renderMeasurementsTable() {
+    const tbody = document.getElementById('measurementsBody');
+    tbody.innerHTML = '';
+
+    measurements.forEach(m => {
+        const row = `
+            <tr>
+                <td>${m.time_hours}</td>
+                <td>${m.mid_depth_central?.toFixed(1) || '-'}</td>
+                <td>${m.mid_depth_side?.toFixed(1) || '-'}</td>
+                <td>${m.top_surface_central?.toFixed(1) || '-'}</td>
+                <td>${m.ambient_temp?.toFixed(1) || '-'}</td>
+                <td>
+                    <button class="btn btn-danger btn-xs" onclick="deleteMeasurement(${m.id})">×</button>
+                </td>
+            </tr>
+        `;
+        tbody.innerHTML += row;
+    });
+
+    if (measurements.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty">No measurements yet</td></tr>';
+    }
+}
+
+function renderComparisonChart() {
+    const ctx = document.getElementById('comparisonChart').getContext('2d');
+
+    if (comparisonChart) comparisonChart.destroy();
+
+    const datasets = [];
+
+    // Predicted data
+    if (predictions.length > 0) {
+        datasets.push({
+            label: 'Predicted Central',
+            data: predictions.map(p => ({x: p.time_hours, y: p.mid_depth_central})),
+            borderColor: '#e74c3c',
+            borderWidth: 2,
+            fill: false,
+            tension: 0.1,
+            pointRadius: 0
+        });
+        datasets.push({
+            label: 'Predicted Surface',
+            data: predictions.map(p => ({x: p.time_hours, y: p.top_surface_central})),
+            borderColor: '#3498db',
+            borderWidth: 2,
+            fill: false,
+            tension: 0.1,
+            pointRadius: 0
+        });
+    }
+
+    // Actual data
+    if (measurements.length > 0) {
+        const centralData = measurements
+            .filter(m => m.mid_depth_central !== null)
+            .map(m => ({x: m.time_hours, y: m.mid_depth_central}));
+
+        const surfaceData = measurements
+            .filter(m => m.top_surface_central !== null)
+            .map(m => ({x: m.time_hours, y: m.top_surface_central}));
+
+        if (centralData.length > 0) {
+            datasets.push({
+                label: 'Actual Central',
+                data: centralData,
+                borderColor: '#c0392b',
+                backgroundColor: '#c0392b',
+                borderWidth: 0,
+                pointRadius: 6,
+                pointStyle: 'circle',
+                showLine: false
+            });
+        }
+
+        if (surfaceData.length > 0) {
+            datasets.push({
+                label: 'Actual Surface',
+                data: surfaceData,
+                borderColor: '#2980b9',
+                backgroundColor: '#2980b9',
+                borderWidth: 0,
+                pointRadius: 6,
+                pointStyle: 'triangle',
+                showLine: false
+            });
+        }
+    }
+
+    comparisonChart = new Chart(ctx, {
+        type: 'scatter',
+        data: {datasets},
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'top'
+                }
+            },
+            scales: {
+                x: {
+                    type: 'linear',
+                    title: {
+                        display: true,
+                        text: 'Time (hours)'
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Temperature (°C)'
+                    }
+                }
+            }
+        }
+    });
+}
+
+function updateAccuracyStats(comparison) {
+    const statsDiv = document.getElementById('accuracyStats');
+
+    if (!comparison.rmse_central && !comparison.rmse_side && !comparison.rmse_surface) {
+        statsDiv.innerHTML = '<p>Add measurements to calculate accuracy metrics</p>';
+        return;
+    }
+
+    let html = '<div class="stats-grid">';
+
+    if (comparison.rmse_central !== null) {
+        html += `
+            <div class="stat">
+                <span class="stat-value">${comparison.rmse_central.toFixed(2)}°C</span>
+                <span class="stat-label">RMSE Central</span>
+            </div>
+        `;
+    }
+
+    if (comparison.rmse_side !== null) {
+        html += `
+            <div class="stat">
+                <span class="stat-value">${comparison.rmse_side.toFixed(2)}°C</span>
+                <span class="stat-label">RMSE Side</span>
+            </div>
+        `;
+    }
+
+    if (comparison.rmse_surface !== null) {
+        html += `
+            <div class="stat">
+                <span class="stat-value">${comparison.rmse_surface.toFixed(2)}°C</span>
+                <span class="stat-label">RMSE Surface</span>
+            </div>
+        `;
+    }
+
+    html += `
+        <div class="stat">
+            <span class="stat-value">${comparison.max_differential_predicted.toFixed(1)}°C</span>
+            <span class="stat-label">Max Diff (Predicted)</span>
+        </div>
+    `;
+
+    if (comparison.max_differential_actual !== null) {
+        html += `
+            <div class="stat">
+                <span class="stat-value">${comparison.max_differential_actual.toFixed(1)}°C</span>
+                <span class="stat-label">Max Diff (Actual)</span>
+            </div>
+        `;
+    }
+
+    html += '</div>';
+    statsDiv.innerHTML = html;
+}
+
+document.getElementById('measurementForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const formData = new FormData(this);
+    const data = {
+        time_hours: parseFloat(formData.get('time_hours'))
+    };
+
+    // Only include fields with values
+    const central = formData.get('mid_depth_central');
+    const side = formData.get('mid_depth_side');
+    const surface = formData.get('top_surface_central');
+    const ambient = formData.get('ambient_temp');
+
+    if (central) data.mid_depth_central = parseFloat(central);
+    if (side) data.mid_depth_side = parseFloat(side);
+    if (surface) data.top_surface_central = parseFloat(surface);
+    if (ambient) data.ambient_temp = parseFloat(ambient);
+
+    try {
+        const response = await fetch(`/api/pours/${pourId}/measurements`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+
+        if (response.ok) {
+            this.reset();
+            loadData();
+        } else {
+            const error = await response.json();
+            alert('Error: ' + error.detail);
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+});
+
+async function importBulk() {
+    const textarea = document.getElementById('bulkData');
+    const lines = textarea.value.trim().split('\n');
+
+    const measurements = [];
+    for (const line of lines) {
+        const parts = line.split(',').map(p => p.trim());
+        if (parts.length < 2) continue;
+
+        const m = {
+            time_hours: parseFloat(parts[0])
+        };
+
+        if (parts[1] && parts[1] !== '') m.mid_depth_central = parseFloat(parts[1]);
+        if (parts[2] && parts[2] !== '') m.mid_depth_side = parseFloat(parts[2]);
+        if (parts[3] && parts[3] !== '') m.top_surface_central = parseFloat(parts[3]);
+        if (parts[4] && parts[4] !== '') m.ambient_temp = parseFloat(parts[4]);
+
+        measurements.push(m);
+    }
+
+    if (measurements.length === 0) {
+        alert('No valid data to import');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/pours/${pourId}/measurements/bulk`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({measurements})
+        });
+
+        if (response.ok) {
+            textarea.value = '';
+            loadData();
+        } else {
+            const error = await response.json();
+            alert('Error: ' + error.detail);
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
+async function deleteMeasurement(id) {
+    if (!confirm('Delete this measurement?')) return;
+
+    try {
+        const response = await fetch(`/api/measurements/${id}`, {method: 'DELETE'});
+        if (response.ok) {
+            loadData();
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
+async function runCalibration() {
+    const btn = document.getElementById('calibrateBtn');
+    const status = document.getElementById('calibrationStatus');
+
+    if (measurements.length < 3) {
+        status.innerHTML = '<p class="error">At least 3 measurements required for calibration</p>';
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Calibrating...';
+    status.innerHTML = '<p class="loading">Running optimization...</p>';
+
+    try {
+        const response = await fetch(`/api/pours/${pourId}/calibrate`, {
+            method: 'POST'
+        });
+
+        if (response.ok) {
+            const calibration = await response.json();
+            status.innerHTML = `
+                <div class="calibration-result success">
+                    <h4>Calibration Complete</h4>
+                    <dl>
+                        <dt>Heat Coefficient</dt>
+                        <dd>${calibration.heat_coefficient.toFixed(3)}</dd>
+                        <dt>Diffusivity Factor</dt>
+                        <dd>${calibration.diffusivity_factor.toFixed(3)}</dd>
+                        <dt>Convection Factor</dt>
+                        <dd>${calibration.convection_factor.toFixed(3)}</dd>
+                    </dl>
+                    <p>Re-run predictions to apply calibration.</p>
+                </div>
+            `;
+
+            // Offer to re-run predictions
+            if (confirm('Calibration complete! Re-run predictions with new coefficients?')) {
+                await fetch(`/api/pours/${pourId}/predict`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({duration_hours: 168, time_step_hours: 1})
+                });
+                loadData();
+            }
+        } else {
+            const error = await response.json();
+            status.innerHTML = `<p class="error">Calibration failed: ${error.detail}</p>`;
+        }
+    } catch (error) {
+        status.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Calibrate Model';
+}
+
+// Load data on page load
+loadData();
+</script>
+{% endblock %}

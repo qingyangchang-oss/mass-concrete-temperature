@@ -1,0 +1,495 @@
+{% extends "base.html" %}
+
+{% block title %}{{ project.name }} - ConcreteAI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ project.name }}</h1>
+        {% if project.location %}
+        <p class="subtitle">{{ project.location }}</p>
+        {% endif %}
+    </div>
+    <a href="/" class="btn btn-secondary">Back to Dashboard</a>
+</div>
+
+<div class="project-info">
+    <div class="info-card">
+        <h3>Project Details</h3>
+        <dl>
+            <dt>Created</dt>
+            <dd>{{ project.created_at.strftime('%Y-%m-%d %H:%M') }}</dd>
+            {% if project.latitude and project.longitude %}
+            <dt>Coordinates</dt>
+            <dd>{{ "%.4f"|format(project.latitude) }}, {{ "%.4f"|format(project.longitude) }}</dd>
+            {% endif %}
+            {% if project.location %}
+            <dt>Location</dt>
+            <dd>{{ project.location }}</dd>
+            {% endif %}
+        </dl>
+    </div>
+</div>
+
+<section class="section">
+    <div class="section-header">
+        <h2>Mix Designs</h2>
+        <button class="btn btn-primary btn-sm" onclick="showMixModal()">Add Mix Design</button>
+    </div>
+
+    {% if mix_designs %}
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Cement Type</th>
+                    <th>Cement (kg/m³)</th>
+                    <th>SCMs</th>
+                    <th>W/C Ratio</th>
+                    <th>Aggregate</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for mix in mix_designs %}
+                <tr>
+                    <td>{{ mix.name or 'Unnamed' }}</td>
+                    <td>{{ mix.cement_type }}</td>
+                    <td>{{ mix.cement_content }}</td>
+                    <td>
+                        {% if mix.ggbs_percent > 0 %}GGBS: {{ mix.ggbs_percent }}% {% endif %}
+                        {% if mix.fly_ash_percent > 0 %}FA: {{ mix.fly_ash_percent }}% {% endif %}
+                        {% if mix.silica_fume_percent > 0 %}SF: {{ mix.silica_fume_percent }}%{% endif %}
+                        {% if mix.ggbs_percent == 0 and mix.fly_ash_percent == 0 and mix.silica_fume_percent == 0 %}None{% endif %}
+                    </td>
+                    <td>{{ mix.water_cement_ratio }}</td>
+                    <td>{{ mix.aggregate_type|capitalize }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty-message">No mix designs yet.</p>
+    {% endif %}
+</section>
+
+<section class="section">
+    <div class="section-header">
+        <h2>Pours</h2>
+        <button class="btn btn-primary btn-sm" onclick="showPourModal()" {% if not mix_designs %}disabled title="Create a mix design first"{% endif %}>Add Pour</button>
+    </div>
+
+    {% if pours %}
+    <div class="table-container">
+        <table class="data-table pours-table">
+            <thead>
+                <tr>
+                    <th>Pour Name</th>
+                    <th>Dimensions (L×W×H)</th>
+                    <th>Casting Date/Time</th>
+                    <th>Location</th>
+                    <th>Ambient Temp</th>
+                    <th>Max Core Temp</th>
+                    <th>Max Differential</th>
+                    <th>Risk Level</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="poursTableBody">
+                {% for pour in pours %}
+                <tr data-pour-id="{{ pour.id }}">
+                    <td>
+                        <strong>{{ pour.name or 'Pour ' + pour.id|string }}</strong>
+                        <br><small class="text-muted">{{ pour.mix_design.cement_type }} - {{ pour.mix_design.cement_content }}kg/m³</small>
+                    </td>
+                    <td>
+                        {{ pour.length }}m × {{ pour.width }}m × {{ pour.height }}m
+                        <br><small class="text-muted">Vol: {{ "%.1f"|format(pour.length * pour.width * pour.height) }} m³</small>
+                    </td>
+                    <td>
+                        {{ pour.casting_datetime.strftime('%Y-%m-%d') }}
+                        <br><small class="text-muted">{{ pour.casting_datetime.strftime('%H:%M') }}</small>
+                    </td>
+                    <td>
+                        {% if project.location %}
+                        {{ project.location }}
+                        {% else %}
+                        <span class="text-muted">Not set</span>
+                        {% endif %}
+                    </td>
+                    <td class="ambient-temp" data-pour-id="{{ pour.id }}">
+                        <span class="loading-text">--</span>
+                    </td>
+                    <td class="max-temp" data-pour-id="{{ pour.id }}">
+                        <span class="loading-text">--</span>
+                    </td>
+                    <td class="max-diff" data-pour-id="{{ pour.id }}">
+                        <span class="loading-text">--</span>
+                    </td>
+                    <td class="risk-level" data-pour-id="{{ pour.id }}">
+                        <span class="loading-text">--</span>
+                    </td>
+                    <td class="actions-cell">
+                        <a href="/pours/{{ pour.id }}/results" class="btn btn-primary btn-xs">Results</a>
+                        <a href="/pours/{{ pour.id }}/calibration" class="btn btn-secondary btn-xs">Calibrate</a>
+                        <button class="btn btn-danger btn-xs" onclick="deletePour({{ pour.id }})">Delete</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty-message">No pours yet. Create a mix design first, then add a pour.</p>
+    {% endif %}
+</section>
+
+<!-- Mix Design Modal -->
+<div id="mixModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Add Mix Design</h2>
+            <button class="close-btn" onclick="closeMixModal()">&times;</button>
+        </div>
+        <form id="mixForm">
+            <div class="form-group">
+                <label for="mixName">Name</label>
+                <input type="text" id="mixName" name="name" placeholder="e.g., Mix-01">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="cementType">Cement Type</label>
+                    <select id="cementType" name="cement_type" required>
+                        <option value="OPC">OPC</option>
+                        <option value="PPC">PPC</option>
+                        <option value="PSC">PSC</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="cementContent">Cement (kg/m³)</label>
+                    <input type="number" id="cementContent" name="cement_content" required min="200" max="600" value="400">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="ggbs">GGBS (%)</label>
+                    <input type="number" id="ggbs" name="ggbs_percent" min="0" max="80" value="0">
+                </div>
+                <div class="form-group">
+                    <label for="flyAsh">Fly Ash (%)</label>
+                    <input type="number" id="flyAsh" name="fly_ash_percent" min="0" max="50" value="0">
+                </div>
+                <div class="form-group">
+                    <label for="silicaFume">Silica Fume (%)</label>
+                    <input type="number" id="silicaFume" name="silica_fume_percent" min="0" max="15" value="0">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="wcRatio">W/C Ratio</label>
+                    <input type="number" id="wcRatio" name="water_cement_ratio" required step="0.01" min="0.3" max="0.7" value="0.45">
+                </div>
+                <div class="form-group">
+                    <label for="aggregate">Aggregate Type</label>
+                    <select id="aggregate" name="aggregate_type" required>
+                        <option value="limestone">Limestone</option>
+                        <option value="granite">Granite</option>
+                        <option value="basalt">Basalt</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeMixModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Add Mix Design</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Pour Modal -->
+<div id="pourModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Add Pour</h2>
+            <button class="close-btn" onclick="closePourModal()">&times;</button>
+        </div>
+        <form id="pourForm">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="pourName">Pour Name</label>
+                    <input type="text" id="pourName" name="name" placeholder="e.g., Foundation A">
+                </div>
+                <div class="form-group">
+                    <label for="mixDesignId">Mix Design</label>
+                    <select id="mixDesignId" name="mix_design_id" required>
+                        {% for mix in mix_designs %}
+                        <option value="{{ mix.id }}">{{ mix.name or 'Mix ' + mix.id|string }} ({{ mix.cement_type }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="length">Length (m)</label>
+                    <input type="number" id="length" name="length" required step="0.1" min="0.5" value="5">
+                </div>
+                <div class="form-group">
+                    <label for="width">Width (m)</label>
+                    <input type="number" id="width" name="width" required step="0.1" min="0.5" value="5">
+                </div>
+                <div class="form-group">
+                    <label for="height">Height (m)</label>
+                    <input type="number" id="height" name="height" required step="0.1" min="0.3" value="2">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="castingDate">Casting Date</label>
+                    <input type="date" id="castingDate" name="casting_date" required>
+                </div>
+                <div class="form-group">
+                    <label for="castingTime">Casting Time</label>
+                    <input type="time" id="castingTime" name="casting_time" required value="08:00">
+                </div>
+                <div class="form-group">
+                    <label for="freshTemp">Fresh Temp (°C)</label>
+                    <input type="number" id="freshTemp" name="fresh_concrete_temp" required min="5" max="40" value="25">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="formwork">Formwork Type</label>
+                    <select id="formwork" name="formwork_type" required>
+                        <option value="plywood">Plywood</option>
+                        <option value="steel">Steel</option>
+                        <option value="insulated">Insulated</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="curing">Curing Method</label>
+                    <select id="curing" name="curing_method" required>
+                        <option value="water">Water Curing</option>
+                        <option value="compound">Curing Compound</option>
+                        <option value="blankets">Blankets</option>
+                        <option value="none">None</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="curingDays">Curing Duration (days)</label>
+                    <input type="number" id="curingDays" name="curing_duration_days" min="0" max="28" value="7">
+                </div>
+                <div class="form-group">
+                    <label for="formworkRemoval">Formwork Removal (hours)</label>
+                    <input type="number" id="formworkRemoval" name="formwork_removal_hours" min="0" max="336" value="72">
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closePourModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Add Pour & Run Prediction</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+const projectId = {{ project.id }};
+const pourIds = [{% for pour in pours %}{{ pour.id }}{% if not loop.last %}, {% endif %}{% endfor %}];
+
+// Set default date
+document.getElementById('castingDate').valueAsDate = new Date();
+
+// Load prediction data for all pours
+async function loadPourData() {
+    for (const pourId of pourIds) {
+        try {
+            const response = await fetch(`/api/pours/${pourId}/predictions`);
+            if (response.ok) {
+                const predictions = await response.json();
+                updatePourRow(pourId, predictions);
+            }
+        } catch (error) {
+            console.error(`Error loading pour ${pourId}:`, error);
+        }
+    }
+}
+
+function updatePourRow(pourId, predictions) {
+    if (!predictions || predictions.length === 0) {
+        // No predictions yet
+        document.querySelector(`.ambient-temp[data-pour-id="${pourId}"]`).innerHTML = '<span class="text-muted">N/A</span>';
+        document.querySelector(`.max-temp[data-pour-id="${pourId}"]`).innerHTML = '<span class="text-muted">Run prediction</span>';
+        document.querySelector(`.max-diff[data-pour-id="${pourId}"]`).innerHTML = '<span class="text-muted">--</span>';
+        document.querySelector(`.risk-level[data-pour-id="${pourId}"]`).innerHTML = '<span class="text-muted">--</span>';
+        return;
+    }
+
+    // Calculate max core temp
+    const maxCoreTemp = Math.max(...predictions.map(p => p.mid_depth_central));
+
+    // Calculate max differential (core - surface)
+    const maxDiff = Math.max(...predictions.map(p => p.mid_depth_central - p.top_surface_central));
+
+    // Get ambient temp at pour time (first prediction)
+    const ambientAtPour = predictions[0].ambient_temp;
+
+    // Determine risk level
+    let risk, riskClass;
+    if (maxDiff < 15) {
+        risk = 'Low';
+        riskClass = 'risk-badge-low';
+    } else if (maxDiff < 20) {
+        risk = 'Moderate';
+        riskClass = 'risk-badge-moderate';
+    } else if (maxDiff < 25) {
+        risk = 'High';
+        riskClass = 'risk-badge-high';
+    } else {
+        risk = 'Very High';
+        riskClass = 'risk-badge-very-high';
+    }
+
+    // Update cells
+    document.querySelector(`.ambient-temp[data-pour-id="${pourId}"]`).innerHTML =
+        `${ambientAtPour.toFixed(1)}°C`;
+
+    document.querySelector(`.max-temp[data-pour-id="${pourId}"]`).innerHTML =
+        `<strong>${maxCoreTemp.toFixed(1)}°C</strong>`;
+
+    const diffCell = document.querySelector(`.max-diff[data-pour-id="${pourId}"]`);
+    diffCell.innerHTML = `<strong>${maxDiff.toFixed(1)}°C</strong>`;
+    if (maxDiff >= 20) {
+        diffCell.classList.add('temp-warning');
+    } else if (maxDiff >= 25) {
+        diffCell.classList.add('temp-danger');
+    }
+
+    document.querySelector(`.risk-level[data-pour-id="${pourId}"]`).innerHTML =
+        `<span class="risk-badge ${riskClass}">${risk}</span>`;
+}
+
+// Load data on page load
+loadPourData();
+
+function showMixModal() {
+    document.getElementById('mixModal').style.display = 'flex';
+}
+
+function closeMixModal() {
+    document.getElementById('mixModal').style.display = 'none';
+}
+
+function showPourModal() {
+    document.getElementById('pourModal').style.display = 'flex';
+}
+
+function closePourModal() {
+    document.getElementById('pourModal').style.display = 'none';
+}
+
+document.getElementById('mixForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    const data = Object.fromEntries(formData.entries());
+
+    // Convert numeric fields
+    data.cement_content = parseFloat(data.cement_content);
+    data.ggbs_percent = parseFloat(data.ggbs_percent) || 0;
+    data.fly_ash_percent = parseFloat(data.fly_ash_percent) || 0;
+    data.silica_fume_percent = parseFloat(data.silica_fume_percent) || 0;
+    data.water_cement_ratio = parseFloat(data.water_cement_ratio);
+
+    try {
+        const response = await fetch(`/api/projects/${projectId}/mix-designs`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+
+        if (response.ok) {
+            location.reload();
+        } else {
+            const error = await response.json();
+            alert('Error: ' + error.detail);
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+});
+
+document.getElementById('pourForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+
+    const castingDateTime = `${formData.get('casting_date')}T${formData.get('casting_time')}:00`;
+
+    const data = {
+        mix_design_id: parseInt(formData.get('mix_design_id')),
+        name: formData.get('name'),
+        length: parseFloat(formData.get('length')),
+        width: parseFloat(formData.get('width')),
+        height: parseFloat(formData.get('height')),
+        casting_datetime: castingDateTime,
+        fresh_concrete_temp: parseFloat(formData.get('fresh_concrete_temp')),
+        formwork_type: formData.get('formwork_type'),
+        curing_method: formData.get('curing_method'),
+        curing_duration_days: parseInt(formData.get('curing_duration_days')) || 7,
+        formwork_removal_hours: parseFloat(formData.get('formwork_removal_hours')) || 72
+    };
+
+    try {
+        const pourResponse = await fetch(`/api/projects/${projectId}/pours`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+
+        if (!pourResponse.ok) {
+            const error = await pourResponse.json();
+            throw new Error(error.detail);
+        }
+
+        const pour = await pourResponse.json();
+
+        // Run prediction
+        const predResponse = await fetch(`/api/pours/${pour.id}/predict`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({duration_hours: 168, time_step_hours: 1})
+        });
+
+        if (predResponse.ok) {
+            window.location.href = `/pours/${pour.id}/results`;
+        } else {
+            location.reload();
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+});
+
+async function deletePour(pourId) {
+    if (!confirm('Delete this pour and all associated data?')) return;
+
+    try {
+        const response = await fetch(`/api/pours/${pourId}`, {method: 'DELETE'});
+        if (response.ok) {
+            location.reload();
+        } else {
+            alert('Failed to delete pour');
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
+// Close modals on outside click
+window.onclick = function(event) {
+    if (event.target.classList.contains('modal')) {
+        event.target.style.display = 'none';
+    }
+}
+</script>
+{% endblock %}

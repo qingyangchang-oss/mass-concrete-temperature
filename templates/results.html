@@ -1,0 +1,361 @@
+{% extends "base.html" %}
+
+{% block title %}Results - {{ pour.name or 'Pour ' + pour.id|string }} - ConcreteAI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Temperature Prediction Results</h1>
+        <p class="subtitle">{{ project.name }} - {{ pour.name or 'Pour ' + pour.id|string }}</p>
+    </div>
+    <div class="header-actions">
+        <a href="/pours/{{ pour.id }}/calibration" class="btn btn-secondary">Add Measurements</a>
+        <a href="/projects/{{ project.id }}/view" class="btn btn-secondary">Back to Project</a>
+    </div>
+</div>
+
+<div class="results-summary">
+    <div class="summary-card">
+        <h3>Pour Details</h3>
+        <dl>
+            <dt>Dimensions</dt>
+            <dd>{{ pour.length }}m × {{ pour.width }}m × {{ pour.height }}m</dd>
+            <dt>Casting Date</dt>
+            <dd>{{ pour.casting_datetime.strftime('%Y-%m-%d %H:%M') }}</dd>
+            <dt>Fresh Concrete Temp</dt>
+            <dd>{{ pour.fresh_concrete_temp }}°C</dd>
+        </dl>
+    </div>
+    <div class="summary-card">
+        <h3>Mix Design</h3>
+        <dl>
+            <dt>Cement Type</dt>
+            <dd>{{ mix_design.cement_type }}</dd>
+            <dt>Cement Content</dt>
+            <dd>{{ mix_design.cement_content }} kg/m³</dd>
+            <dt>W/C Ratio</dt>
+            <dd>{{ mix_design.water_cement_ratio }}</dd>
+        </dl>
+    </div>
+    <div class="summary-card" id="riskCard">
+        <h3>Crack Risk Assessment</h3>
+        <div class="risk-indicator" id="riskIndicator">
+            <span class="risk-value" id="riskValue">--</span>
+            <span class="risk-label" id="riskLabel">Loading...</span>
+        </div>
+        <dl>
+            <dt>Max Core Temp</dt>
+            <dd id="maxCoreTemp">--</dd>
+            <dt>Max Differential</dt>
+            <dd id="maxDifferential">--</dd>
+            <dt>Peak Time</dt>
+            <dd id="peakTime">--</dd>
+        </dl>
+    </div>
+</div>
+
+<div class="chart-container">
+    <h2>Temperature Profile</h2>
+    <div class="chart-controls">
+        <label>
+            <input type="checkbox" id="showAmbient" checked> Ambient Temperature
+        </label>
+        <label>
+            <input type="checkbox" id="showDifferential"> Show Differential
+        </label>
+    </div>
+    <canvas id="tempChart"></canvas>
+</div>
+
+<div class="chart-container">
+    <h2>Temperature Differential (Core - Surface)</h2>
+    <canvas id="diffChart"></canvas>
+</div>
+
+<div class="data-section">
+    <h2>Prediction Data</h2>
+    <div class="table-controls">
+        <button class="btn btn-secondary btn-sm" onclick="exportCSV()">Export CSV</button>
+    </div>
+    <div class="table-container" style="max-height: 400px; overflow-y: auto;">
+        <table class="data-table" id="dataTable">
+            <thead>
+                <tr>
+                    <th>Time (hours)</th>
+                    <th>Mid-Depth Central (°C)</th>
+                    <th>Mid-Depth Side (°C)</th>
+                    <th>Top Surface (°C)</th>
+                    <th>Ambient (°C)</th>
+                    <th>Differential (°C)</th>
+                </tr>
+            </thead>
+            <tbody id="dataBody">
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+const pourId = {{ pour.id }};
+let predictions = [];
+let tempChart = null;
+let diffChart = null;
+
+async function loadPredictions() {
+    try {
+        const response = await fetch(`/api/pours/${pourId}/predictions`);
+        if (!response.ok) throw new Error('Failed to load predictions');
+
+        predictions = await response.json();
+
+        if (predictions.length === 0) {
+            alert('No predictions found. Running prediction...');
+            await runPrediction();
+            return;
+        }
+
+        renderCharts();
+        renderTable();
+        updateSummary();
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error loading predictions: ' + error.message);
+    }
+}
+
+async function runPrediction() {
+    try {
+        const response = await fetch(`/api/pours/${pourId}/predict`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({duration_hours: 168, time_step_hours: 1})
+        });
+
+        if (response.ok) {
+            predictions = await response.json();
+            renderCharts();
+            renderTable();
+            updateSummary();
+        }
+    } catch (error) {
+        console.error('Error:', error);
+    }
+}
+
+function renderCharts() {
+    const labels = predictions.map(p => p.time_hours);
+    const central = predictions.map(p => p.mid_depth_central);
+    const side = predictions.map(p => p.mid_depth_side);
+    const surface = predictions.map(p => p.top_surface_central);
+    const ambient = predictions.map(p => p.ambient_temp);
+    const differential = predictions.map(p => p.mid_depth_central - p.top_surface_central);
+
+    // Temperature chart
+    const ctx1 = document.getElementById('tempChart').getContext('2d');
+    if (tempChart) tempChart.destroy();
+
+    tempChart = new Chart(ctx1, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Mid-Depth Central',
+                    data: central,
+                    borderColor: '#e74c3c',
+                    backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.1
+                },
+                {
+                    label: 'Mid-Depth Side',
+                    data: side,
+                    borderColor: '#f39c12',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.1
+                },
+                {
+                    label: 'Top Surface',
+                    data: surface,
+                    borderColor: '#3498db',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.1
+                },
+                {
+                    label: 'Ambient',
+                    data: ambient,
+                    borderColor: '#95a5a6',
+                    borderWidth: 1,
+                    borderDash: [5, 5],
+                    fill: false,
+                    tension: 0.1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'top'
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false
+                }
+            },
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Time (hours)'
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Temperature (°C)'
+                    }
+                }
+            }
+        }
+    });
+
+    // Differential chart
+    const ctx2 = document.getElementById('diffChart').getContext('2d');
+    if (diffChart) diffChart.destroy();
+
+    diffChart = new Chart(ctx2, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Core - Surface Differential',
+                    data: differential,
+                    borderColor: '#9b59b6',
+                    backgroundColor: 'rgba(155, 89, 182, 0.2)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.1
+                },
+                {
+                    label: '20°C Limit',
+                    data: labels.map(() => 20),
+                    borderColor: '#e74c3c',
+                    borderWidth: 1,
+                    borderDash: [10, 5],
+                    fill: false,
+                    pointRadius: 0
+                },
+                {
+                    label: '25°C Limit',
+                    data: labels.map(() => 25),
+                    borderColor: '#c0392b',
+                    borderWidth: 1,
+                    borderDash: [5, 5],
+                    fill: false,
+                    pointRadius: 0
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'top'
+                }
+            },
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Time (hours)'
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Temperature Differential (°C)'
+                    },
+                    min: 0
+                }
+            }
+        }
+    });
+}
+
+function renderTable() {
+    const tbody = document.getElementById('dataBody');
+    tbody.innerHTML = '';
+
+    predictions.forEach(p => {
+        const diff = (p.mid_depth_central - p.top_surface_central).toFixed(1);
+        const row = `
+            <tr>
+                <td>${p.time_hours}</td>
+                <td>${p.mid_depth_central.toFixed(1)}</td>
+                <td>${p.mid_depth_side.toFixed(1)}</td>
+                <td>${p.top_surface_central.toFixed(1)}</td>
+                <td>${p.ambient_temp.toFixed(1)}</td>
+                <td>${diff}</td>
+            </tr>
+        `;
+        tbody.innerHTML += row;
+    });
+}
+
+function updateSummary() {
+    const maxCore = Math.max(...predictions.map(p => p.mid_depth_central));
+    const maxDiff = Math.max(...predictions.map(p => p.mid_depth_central - p.top_surface_central));
+    const peakIdx = predictions.findIndex(p => p.mid_depth_central === maxCore);
+    const peakTime = predictions[peakIdx]?.time_hours || 0;
+
+    document.getElementById('maxCoreTemp').textContent = maxCore.toFixed(1) + '°C';
+    document.getElementById('maxDifferential').textContent = maxDiff.toFixed(1) + '°C';
+    document.getElementById('peakTime').textContent = peakTime + ' hours';
+
+    // Risk assessment
+    let risk, riskClass;
+    if (maxDiff < 15) {
+        risk = 'Low';
+        riskClass = 'risk-low';
+    } else if (maxDiff < 20) {
+        risk = 'Moderate';
+        riskClass = 'risk-moderate';
+    } else if (maxDiff < 25) {
+        risk = 'High';
+        riskClass = 'risk-high';
+    } else {
+        risk = 'Very High';
+        riskClass = 'risk-very-high';
+    }
+
+    const riskIndicator = document.getElementById('riskIndicator');
+    riskIndicator.className = 'risk-indicator ' + riskClass;
+    document.getElementById('riskValue').textContent = maxDiff.toFixed(1) + '°C';
+    document.getElementById('riskLabel').textContent = risk + ' Risk';
+}
+
+function exportCSV() {
+    let csv = 'Time (hours),Mid-Depth Central (°C),Mid-Depth Side (°C),Top Surface (°C),Ambient (°C),Differential (°C)\n';
+
+    predictions.forEach(p => {
+        const diff = (p.mid_depth_central - p.top_surface_central).toFixed(1);
+        csv += `${p.time_hours},${p.mid_depth_central.toFixed(1)},${p.mid_depth_side.toFixed(1)},${p.top_surface_central.toFixed(1)},${p.ambient_temp.toFixed(1)},${diff}\n`;
+    });
+
+    const blob = new Blob([csv], {type: 'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `temperature_prediction_pour_${pourId}.csv`;
+    a.click();
+}
+
+// Load data on page load
+loadPredictions();
+</script>
+{% endblock %}
